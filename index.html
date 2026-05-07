@@ -255,11 +255,14 @@ svg { width: 16px; height: 16px; }
     </div>
 
 ```
-<div class="setup-label">Database ID</div>
-<input class="setup-input" id="inputDbId" type="text" placeholder="359343b2edec80da9f38ed4f44c4443d">
-<div class="setup-hint">DB URL에서 ?v= 앞 32자리</div>
+<!-- Step 1: DB 선택 -->
+<div id="stepDb">
+  <div class="setup-label">사용할 데이터베이스 선택</div>
+  <div id="dbList" style="margin-top:8px;">
+    <button class="setup-btn" onclick="fetchDatabases()" style="margin-top:4px;">DB 목록 불러오기 ✦</button>
+  </div>
+</div>
 
-<button class="setup-btn" onclick="saveConfig()">연결하기 ✦</button>
 <div class="setup-error" id="setupError"></div>
 ```
 
@@ -338,25 +341,44 @@ svg { width: 16px; height: 16px; }
     }
   }
 
-  async function saveConfig() {
-    const d = document.getElementById('inputDbId').value.trim();
+  async function fetchDatabases() {
     const errEl = document.getElementById('setupError');
     errEl.textContent = '';
-    if (!d) { errEl.textContent = 'Database ID를 입력해 주세요.'; return; }
-
-    DB_ID = d;
-    setSyncState('loading', '연결 테스트 중...');
+    const dbList = document.getElementById('dbList');
+    dbList.innerHTML = '<div style="color:#bbb;font-size:12px;padding:8px 0;">불러오는 중... 🌸</div>';
 
     try {
-      const res = await apiFetch(`/databases/${DB_ID}`);
-      if (!res.ok) throw new Error(await res.text());
-      localStorage.setItem('notion_todo_db', d);
-      document.getElementById('setupOverlay').style.display = 'none';
-      loadTodos();
+      const res = await apiFetch('/search-databases', 'GET');
+      const data = await res.json();
+
+      if (!data.results || data.results.length === 0) {
+        dbList.innerHTML = '<div style="color:#e05c7a;font-size:11px;">연결된 DB가 없어요. Integration이 DB에 연결됐는지 확인해 주세요.</div>';
+        return;
+      }
+
+      dbList.innerHTML = '';
+      data.results.forEach(db => {
+        const title = db.title?.[0]?.plain_text || '(이름 없음)';
+        const btn = document.createElement('button');
+        btn.className = 'setup-btn';
+        btn.style.marginTop = '6px';
+        btn.style.textAlign = 'left';
+        btn.style.padding = '0 12px';
+        btn.style.fontSize = '12px';
+        btn.textContent = `📋 ${title}`;
+        btn.onclick = () => selectDb(db.id, title);
+        dbList.appendChild(btn);
+      });
     } catch(e) {
-      errEl.textContent = '연결 실패. DB ID를 확인하고, Integration이 DB에 연결됐는지 확인해 주세요.';
-      setSyncState('err', '연결 실패');
+      errEl.textContent = '불러오기 실패. Vercel에 NOTION_TOKEN이 설정됐는지 확인해 주세요.';
     }
+  }
+
+  function selectDb(id, title) {
+    DB_ID = id;
+    localStorage.setItem('notion_todo_db', id);
+    document.getElementById('setupOverlay').style.display = 'none';
+    loadTodos();
   }
 
   // ── API 호출 (Vercel 서버 경유) ──
